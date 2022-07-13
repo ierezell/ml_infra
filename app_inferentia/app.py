@@ -257,7 +257,7 @@ class Question(BaseModel):
     context: str
 
 
-@app.post("/status")
+@app.get("/status")
 def status():
     return {"status": "ok"}
 

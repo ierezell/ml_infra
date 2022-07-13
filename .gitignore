@@ -1,0 +1,41 @@
+.DS_Store
+*.d.ts
+node_modules
+.venv
+**/models/*.onnx
+**/models/*.pt
+**/models/*.pth
+**/models/*.json
+**/models/*.model
+**/models/*.bin
+
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+cdk.out/asset*
+
+*.js
+!jest.config.js
+!.eslintrc.js
+!lib/lambda/**/*.js
+!setup.js
+!commons/src/lambda/ses/*.js
+!commons/src/webassembly.d.ts
+yarn-error.log
+.yarn
+.pnp.*
+dist
+
+.ignore.me.*
+
+# cdktf ignore
+cdktf.out
+cdktf.log
+*terraform.*.tfstate*
+.terraform
+tsconfig.tsbuildinfo
+# connect.sh artifacts
+temp
+temp.pub
+cdktf.out
