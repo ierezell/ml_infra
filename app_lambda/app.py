@@ -51,8 +51,8 @@ class T5QuestionGenerator:
         model = AutoModelForSeq2SeqLM.from_pretrained(self.weights_cache_folder)
         tokenizer = AutoTokenizer.from_pretrained(self.weights_cache_folder)
 
-        tokenizer.save_pretrained(self.weights_cache_folder)
-        model.save_pretrained(self.weights_cache_folder)
+        # tokenizer.save_pretrained(self.weights_cache_folder)
+        # model.save_pretrained(self.weights_cache_folder)
         
         self.pipeline = MultipleText2TextGenerationPipeline(
             model=model, tokenizer=tokenizer,device=0 if gpu_available() else -1
