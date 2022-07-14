@@ -1,15 +1,4 @@
-FROM 763104351884.dkr.ecr.us-west-2.amazonaws.com/pytorch-inference-neuron:1.10.2-neuron-py37-sdk1.19.0-ubuntu18.04
-
-RUN apt-get update -y && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    gnupg2 \
-    software-properties-common
-
-RUN apt-get install linux-headers-$(uname -r) -y
-RUN apt-get install aws-neuron-dkms --allow-change-held-packages -y
-RUN apt-get install aws-neuron-tools -y
-RUN export PATH=/opt/aws/neuron/bin:$PATH
+FROM python:3.7
 
 COPY ./models /models
 

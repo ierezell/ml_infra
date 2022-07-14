@@ -34,7 +34,7 @@ export class GPUStack extends cdk.Stack
       {
         cluster: cluster,
         desiredCount: 1,
-        memoryLimitMiB: 2048,
+        memoryLimitMiB: 4096,
         publicLoadBalancer: true,
         healthCheckGracePeriod: cdk.Duration.minutes(5),
         taskImageOptions: {
