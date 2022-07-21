@@ -1,0 +1,30 @@
+
+[flake8]
+exclude = .git,__pycache__,build,dist,.venv
+# TODO Lower me
+max-complexity = 20
+max-cognitive-complexity = 20
+max-expression-complexity = 20
+ignore =
+    # E501 Line too long
+    E501,
+    # E203 Whitespace before :
+    E203,
+    # Missing whitespace after ',' as black add , after list or dictionaries
+    E231,
+    # continuation line over-indented for hanging indent
+    E126
+    # S104 binding to all interfaces,
+    S104,
+    # S403 Pickle safety, S301
+    S403,
+    # B008 function call in default
+    B008,
+    # TODO remove N815 mixedCase, N801, N803, N806
+    N815,
+    N801,
+    N803,
+    N806,
+    # W503 line break before binary operator
+    W503,
+    E266,
