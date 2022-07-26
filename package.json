@@ -4,8 +4,8 @@
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
-    "aws-cdk": "^2.31.1",
-    "aws-cdk-lib": "^2.31.1",
+    "aws-cdk": "2.33.0",
+    "aws-cdk-lib": "2.33.0",
     "constructs": "^10.1.43",
     "typescript": "^4.7.4"
   }

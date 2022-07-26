@@ -1,7 +1,7 @@
 import os
 
 # from time import perf_counter
-from typing import Any, Optional, cast
+from typing import Any, Optional, cast, List
 
 # import numpy as np
 import tensorflow  # type: ignore
@@ -227,9 +227,7 @@ def infer(model: NeuronGeneration, tokenizer: T5Tokenizer, text: str):
     )
     results = [tokenizer.decode(t, skip_special_tokens=True) for t in output]
 
-    print("Texts:")
-    for i, summary in enumerate(results):
-        print(i + 1, summary)
+    return results
 
 
 # model_cpu = cast(T5ForConditionalGeneration, T5ForConditionalGeneration.from_pretrained(model_id))
@@ -253,8 +251,8 @@ app = FastAPI()
 
 
 class Question(BaseModel):
-    answer: str
-    context: str
+    answers: List[List[str]]
+    contexts: List[str]
 
 
 @app.get("/status")
@@ -264,12 +262,16 @@ def status():
 
 @app.post("/")
 def handler(question: Question):
-    result = infer(
-        model_neuron,
-        tokenizer_cpu,
-        f"answer: {question.answer} context: {question.context}",
-    )
-    return {"results": result}
+    all_results = []
+
+    for ctx_idx, context in enumerate(question.contexts):
+        for answer in question.answers[ctx_idx]:
+            res = infer(
+                model_neuron, tokenizer_cpu, f"answer: {answer} context: {context}"
+            )
+            all_results.append(res)
+
+    return {"results": all_results}
 
 
 if __name__ == "__main__":
