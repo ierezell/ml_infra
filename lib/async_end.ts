@@ -146,66 +146,59 @@ export class AsyncStack extends cdk.Stack
     })
     targetScale.node.addDependency(scale)
 
+    const sagemaker_lambda_role = new cdk.aws_iam.Role(this, "SageMakerLambdaRole", {
+      assumedBy: new cdk.aws_iam.ServicePrincipal("lambda.amazonaws.com"),
+      managedPolicies: [
+        // Allow the lambda to log in cloudwatch
+        cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AWSLambdaBasicExecutionRole')
+      ],
+      inlinePolicies: {
+        "SageMakerLambdaPolicy": new cdk.aws_iam.PolicyDocument({
+          statements: [
+            new cdk.aws_iam.PolicyStatement({
+              resources: [async_endpoint.ref],
+              effect: cdk.aws_iam.Effect.ALLOW,
+              actions: ["sagemaker:InvokeEndpointAsync"],
+            }),
+            new cdk.aws_iam.PolicyStatement({
+              resources: [
+                s3_async_input_bucket.bucketArn,
+                s3_async_input_bucket.bucketArn + "/*"
+              ],
+              effect: cdk.aws_iam.Effect.ALLOW,
+              actions: [
+                "s3:PutObject", "s3:PutObjectAcl",
+                "s3:Abort", "s3:AbortMultipartUpload",
+                "s3:GetObject", "s3:GetObjectAcl",
+                "s3:ListBucket",
+              ]
+            }),
+            new cdk.aws_iam.PolicyStatement({
+              resources: [
+                s3_async_output_bucket.bucketArn,
+                s3_async_output_bucket.bucketArn + "/*"
+              ],
+              effect: cdk.aws_iam.Effect.ALLOW,
+              actions: [
+                "s3:GetObject", "s3:GetObjectAcl",
+                "s3:ListBucket",
+              ]
+            })
+          ]
+        })
+      }
+    })
+
     const sagemaker_lambda = new cdk.aws_lambda.Function(this, "LambdaForSagemaker", {
-      code: cdk.aws_lambda.Code.fromInline(`
-import os
-import io
-import boto3
-import json
-
-ENDPOINT_NAME = os.environ['ENDPOINT_NAME']
-INPUT_BUCKET = os.environ['INPUT_BUCKET']
-
-sagemaker_runtime= boto3.client('runtime.sagemaker')
-s3 = boto3.resource('s3')
-
-def lambda_handler(event, context):
-    print(f"Received event: {json.dumps(event, indent=2)}")
-    data = json.loads(json.dumps(event))
-    payload = data['data']
-    print(payload)
-
-    inputs = []
-    for ctx_idx,context in payload['context]: 
-        for answer in payload['answers'][ctx_idx]:
-            inputs.append(f'answer: {answer} context: {context}')
-
-    s3object = s3.Object(INPUT_BUCKET, 'temp_input_file.json')
-    json_data = {
-        "inputs": inputs,
-        "parameters": {
-            "max_length": 128,
-            "min_length": 2,
-            "early_stopping": true,
-            "num_beams": 4,
-            "temperature": 1.0,
-            "num_return_sequences": 4,
-            "top_k": 0,
-            "top_p": 0.92,
-            "repetition_penalty": 2.0,
-            "length_penalty": 1.0
-        }
-    }
-    s3object.put(Body=(bytes(json.dumps(json_data).encode('UTF-8'))))
-
-    response = runtime.invoke_endpoint_async(
-      EndpointName=ENDPOINT_NAME, 
-      InputLocation=INPUT_BUCKET + '/temp_input_file.json',
-    ) 
-      
-    print(response)
-    result = json.loads(response['Body'].read().decode())  
-    return result
-`
-      ),
-      runtime: cdk.aws_lambda.Runtime.PYTHON_3_7,
+      role: sagemaker_lambda_role,
+      code: cdk.aws_lambda.Code.fromAsset("./app_async"),
+      runtime: cdk.aws_lambda.Runtime.PYTHON_3_9,
       environment: {
         "ENDPOINT_NAME": async_endpoint.endpointName!,
         "INPUT_BUCKET": s3_async_input_bucket.bucketName!,
       },
-      handler: "index.lambda_handler",
-    }
-    )
+      handler: "app.lambda_handler",
+    })
 
     const lambda_url = new cdk.aws_lambda.FunctionUrl(this, "LambdaUrl", {
       function: sagemaker_lambda,
