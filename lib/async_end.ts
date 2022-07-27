@@ -30,45 +30,118 @@ export class AsyncStack extends cdk.Stack
     super(scope, id, props)
     const instanceType = "ml.g4dn.xlarge"
 
-    const sagemakerRole = new cdk.aws_iam.Role(
-      this, "SageMakerRole", {
-      assumedBy: new cdk.aws_iam.ServicePrincipal("sagemaker.amazonaws.com")
+    const output_key = new cdk.aws_kms.Key(this, 'OutputKey')
+
+    const s3_async_output_bucket = new cdk.aws_s3.Bucket(this, 'S3OutputBucket', {
+      bucketName: 'bp-async-output',
+      autoDeleteObjects: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
     })
 
-    sagemakerRole.addToPolicy(new cdk.aws_iam.PolicyStatement(
-      {
-        resources: ["*"],
-        actions: [
-          "sagemaker:*",
-          "kms:Decrypt",
-          "ssm:GetParameters",
-          "secretsmanager:GetSecretValue",
-          'ecr:GetAuthorizationToken',
-          'ecr:GetDownloadUrlForLayer',
-          'ecr:BatchGetImage',
-          "ecr:*",
-          "s3:*",
-          "ecr:GetDownloadUrlForLayer",
-          "ecr:BatchGetImage",
-          "ecr:BatchCheckLayerAvailability",
-          "ecr:GetAuthorizationToken",
-          "cloudwatch:PutMetricData",
-          "cloudwatch:GetMetricData",
-          "cloudwatch:GetMetricStatistics",
-          "cloudwatch:ListMetrics",
-          "logs:CreateLogGroup",
-          "logs:CreateLogStream",
-          "logs:DescribeLogStreams",
-          "logs:PutLogEvents",
-          "logs:GetLogEvents",
-          "s3:CreateBucket",
-          "s3:ListBucket",
-          "s3:GetBucketLocation",
-          "s3:GetObject",
-          "s3:PutObject",
-        ],
-        sid: 'AllowECRLoginAndPull',
-      }))
+    const s3_async_input_bucket = new cdk.aws_s3.Bucket(this, 'S3InputBucket', {
+      bucketName: 'bp-async-input',
+      autoDeleteObjects: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    })
+
+    const sagemakerRole = new cdk.aws_iam.Role(
+      this, "SageMakerRole", {
+      assumedBy: new cdk.aws_iam.ServicePrincipal("sagemaker.amazonaws.com"),
+      inlinePolicies: {
+        "EcrPullPolicy": new cdk.aws_iam.PolicyDocument({
+          statements: [
+            new cdk.aws_iam.PolicyStatement({
+              resources: ["*"],
+              actions: [
+                "ecr:GetAuthorizationToken",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetAuthorizationToken",
+              ]
+            })]
+        }),
+        "Logs": new cdk.aws_iam.PolicyDocument({
+          statements: [
+            new cdk.aws_iam.PolicyStatement({
+              resources: ["*"],
+              actions: [
+                "cloudwatch:PutMetricData",
+                "cloudwatch:GetMetricData",
+                "cloudwatch:GetMetricStatistics",
+                "cloudwatch:ListMetrics",
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:DescribeLogStreams",
+                "logs:PutLogEvents",
+                "logs:GetLogEvents",
+              ]
+            })]
+        }),
+        "s3": new cdk.aws_iam.PolicyDocument({
+          statements: [
+            new cdk.aws_iam.PolicyStatement({
+              resources: [
+                s3_async_output_bucket.bucketArn,
+                s3_async_output_bucket.bucketArn + "/*",
+              ],
+              actions: [
+                "s3:*",
+                "s3:CreateBucket",
+                "s3:ListBucket",
+                "s3:GetBucketLocation",
+                "s3:GetObject",
+                "s3:GetObjectAcl",
+                "s3:PutObject",
+                "s3:PutObjectAcl",
+              ]
+            }),
+            new cdk.aws_iam.PolicyStatement({
+              resources: [
+                s3_async_input_bucket.bucketArn,
+                s3_async_input_bucket.bucketArn + "/*",
+              ],
+              actions: [
+                "s3:*",
+                "s3:GetBucketLocation",
+                "s3:GetObject",
+                "s3:GetObjectAcl",
+                "s3:ListBucket"
+              ]
+            }),
+          ]
+        }),
+        "Sagemaker": new cdk.aws_iam.PolicyDocument({
+          statements: [
+            new cdk.aws_iam.PolicyStatement(
+              {
+                resources: ["*"],
+                actions: [
+                  "sagemaker:*",
+                  "ssm:GetParameters",
+                  "secretsmanager:GetSecretValue",
+                ]
+              })
+          ]
+        }),
+        "KMS": new cdk.aws_iam.PolicyDocument({
+          statements: [
+            new cdk.aws_iam.PolicyStatement({
+              resources: [output_key.keyArn],
+              actions: [
+                "kms:*",
+                "kms:Decrypt",
+                "kms:Encrypt",
+              ]
+            }),
+          ]
+        }),
+      }
+    })
+    sagemakerRole.node.addDependency(s3_async_input_bucket)
+    sagemakerRole.node.addDependency(s3_async_output_bucket)
 
     const model = new cdk.aws_sagemaker.CfnModel(this, "model",
       {
@@ -86,17 +159,6 @@ export class AsyncStack extends cdk.Stack
     )
     model.node.addDependency(sagemakerRole)
 
-    const s3_async_output_bucket = new cdk.aws_s3.Bucket(this, 'S3OutputBucket', {
-      bucketName: 'bp-async-output',
-      autoDeleteObjects: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY
-    })
-
-    const s3_async_input_bucket = new cdk.aws_s3.Bucket(this, 'S3InputBucket', {
-      bucketName: 'bp-async-input',
-      autoDeleteObjects: true,
-      removalPolicy: cdk.RemovalPolicy.DESTROY
-    })
 
     const async_endpoint_config = new cdk.aws_sagemaker.CfnEndpointConfig(
       this, "SageMakerEndpointConfig",
@@ -113,6 +175,7 @@ export class AsyncStack extends cdk.Stack
         asyncInferenceConfig: {
           outputConfig: {
             s3OutputPath: s3_async_output_bucket.s3UrlForObject(),
+            kmsKeyId: output_key.keyId,
           },
           clientConfig: { maxConcurrentInvocationsPerInstance: 123 },
         }
@@ -139,8 +202,8 @@ export class AsyncStack extends cdk.Stack
 
     const targetScale = new cdk.aws_applicationautoscaling.TargetTrackingScalingPolicy(this, 'AutoscalingPolicy', {
       targetValue: 5.0,
-      scaleInCooldown: cdk.Duration.minutes(10),
-      scaleOutCooldown: cdk.Duration.minutes(10),
+      scaleInCooldown: cdk.Duration.minutes(2),
+      scaleOutCooldown: cdk.Duration.minutes(2),
       predefinedMetric: cdk.aws_applicationautoscaling.PredefinedMetric.SAGEMAKER_VARIANT_INVOCATIONS_PER_INSTANCE,
       scalingTarget: scale,
     })
@@ -179,10 +242,12 @@ export class AsyncStack extends cdk.Stack
                 s3_async_output_bucket.bucketArn + "/*"
               ],
               effect: cdk.aws_iam.Effect.ALLOW,
-              actions: [
-                "s3:GetObject", "s3:GetObjectAcl",
-                "s3:ListBucket",
-              ]
+              actions: ["s3:GetObject", "s3:GetObjectAcl", "s3:ListBucket"]
+            }),
+            new cdk.aws_iam.PolicyStatement({
+              resources: [output_key.keyArn],
+              effect: cdk.aws_iam.Effect.ALLOW,
+              actions: ["kms:Decrypt"]
             })
           ]
         })
@@ -191,6 +256,7 @@ export class AsyncStack extends cdk.Stack
 
     const sagemaker_lambda = new cdk.aws_lambda.Function(this, "LambdaForSagemaker", {
       role: sagemaker_lambda_role,
+      description: "Call sagemaker endpoint by placing input in a bucket, calling Sagemaker, and reading the output bucket.",
       code: cdk.aws_lambda.Code.fromAsset("./app_async"),
       runtime: cdk.aws_lambda.Runtime.PYTHON_3_9,
       environment: {
@@ -198,6 +264,7 @@ export class AsyncStack extends cdk.Stack
         "INPUT_BUCKET": s3_async_input_bucket.bucketName!,
       },
       handler: "app.lambda_handler",
+      timeout: cdk.Duration.seconds(30),
     })
 
     const lambda_url = new cdk.aws_lambda.FunctionUrl(this, "LambdaUrl", {

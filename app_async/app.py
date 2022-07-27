@@ -2,7 +2,8 @@ import os
 import boto3
 import json
 from typing import Any, TypedDict, Literal
-from tempfile import NamedTemporaryFile
+from botocore.exceptions import ClientError
+from time import sleep
 
 ResponseHeaders = TypedDict(
     "ResponseHeaders",
@@ -99,22 +100,19 @@ ENDPOINT_NAME = os.environ["ENDPOINT_NAME"]
 INPUT_BUCKET = os.environ["INPUT_BUCKET"]
 
 sagemaker_runtime = boto3.client("runtime.sagemaker")  # type: ignore
-s3_client = boto3.client("s3")
+s3_resource = boto3.resource("s3")
+s3_input_bucket = s3_resource.Object(INPUT_BUCKET, "temp_input_file.json")
 
 
 def lambda_handler(event: ReceivedEvent, context: Any):
-    print(f"Received event: {json.dumps(event, indent=2)}")
     data: ReceivedEvent = json.loads(json.dumps(event))
     payload: ReceivedBody = json.loads(data["body"])
-
-    print("Payload:", payload)
 
     inputs: list[str] = []
     for ctx_idx, ctx in enumerate(payload["contexts"]):
         for answer in payload["answers"][ctx_idx]:
             inputs.append(f"answer: {answer} context: {ctx}")
 
-    s3_input_bucket = s3_client.Object(INPUT_BUCKET, "temp_input_file.json")
     json_data = {
         "inputs": inputs,
         "parameters": {
@@ -130,21 +128,25 @@ def lambda_handler(event: ReceivedEvent, context: Any):
             "length_penalty": 1.0,
         },
     }
-
-    s3_input_bucket.put(Body=(bytes(json.dumps(json_data).encode("UTF-8"))))
+    s3_input_bucket.put(Body=json.dumps(json_data))
 
     response: Response = sagemaker_runtime.invoke_endpoint_async(
         EndpointName=ENDPOINT_NAME,
         InputLocation="s3://" + INPUT_BUCKET + "/temp_input_file.json",
+        ContentType="application/json",
     )
     print(response)
 
-    s3_out_name, s3_out_key = response["OutputLocation"].split("/")[-2:]
-    print(response["OutputLocation"])
-    print(f"s3_out_name: {s3_out_name} s3_out_key: {s3_out_key}")
-    s3_output_bucket = s3_handler.Object(s3_out_name, s3_out_key)
-    output_data = s3_output_bucket.get()
-    print(output_data)
+    s3_bucket, s3_key = response["OutputLocation"].split("/")[-2:]
+    print(s3_bucket, s3_key)
+    results = None
 
-    result = json.loads(output_data.read().decode())
-    return result
+    while results is None:
+        try:
+            results = s3_resource.Object(s3_bucket, s3_key).get()
+            print(results)
+        except ClientError:
+            sleep(0.5)
+
+    res_str: str = results["Body"].read().decode("utf-8")
+    return {"results": json.loads(res_str)}

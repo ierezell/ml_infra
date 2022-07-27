@@ -1,6 +1,5 @@
 import requests
 
-
 payload = {"answers": [["CEO"]], "contexts": ["Sylvain is the CEO of Botpress."]}
 
 vanilla_lambda_url = "https://f9sxufa4oc.execute-api.us-east-1.amazonaws.com/prod/"
@@ -9,7 +8,7 @@ ec2_gpu_url = "http://bp-gp-Appli-1S4QDXVMDZPXL-740407946.us-east-1.elb.amazonaw
 ec2_inferentia_url = (
     "http://bp-in-Appli-1A84QB3IVIECM-458273597.us-east-1.elb.amazonaws.com"
 )
-async_url = "https://runtime.sagemaker.us-east-1.amazonaws.com/endpoints/SagemakerEndpoint/invocations/"
+async_url = "https://2kz6dhli2kio4v3xfjhddcmaoq0tasci.lambda-url.us-east-1.on.aws/"
 
 # onnx_req_warm = requests.post(onnx_lambda_url, json=payload)
 # print("onnx warmup :",onnx_req_warm.elapsed, onnx_req_warm.text)
@@ -27,5 +26,5 @@ async_url = "https://runtime.sagemaker.us-east-1.amazonaws.com/endpoints/Sagemak
 # inf_req = requests.post(ec2_inferentia_url, json=payload)
 # print("inferentia :", inf_req.elapsed, inf_req.text)
 
-async_req = requests.post(async_url,json=payload)
+async_req = requests.post(async_url, json=payload)
 print("async :", async_req.elapsed, async_req.text)
