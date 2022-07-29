@@ -4,10 +4,13 @@ node_modules
 .venv
 **/models/*.onnx
 **/models/*.pt
+**/*.pt
+**/*.model
 **/models/*.pth
 **/models/*.json
 **/models/*.model
 **/models/*.bin
+**/*.tar.gz
 
 
 # CDK asset staging directory

@@ -44,6 +44,22 @@ export class AsyncStack extends cdk.Stack
       removalPolicy: cdk.RemovalPolicy.DESTROY
     })
 
+    const s3_model_bucket = new cdk.aws_s3.Bucket(this, 'S3ModelBucket', {
+      bucketName: "bp-async-model-data",
+      autoDeleteObjects: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    })
+
+    const s3_model_data = new cdk.aws_s3_deployment.BucketDeployment(this, 'S3ModelData', {
+      destinationBucket: s3_model_bucket,
+      memoryLimit: 4096,
+      ephemeralStorageSize: cdk.Size.gibibytes(4),
+      sources: [
+        // asset in a folder so folder get zipped and unzipped but the asset file is still a zip
+        cdk.aws_s3_deployment.Source.asset("./app_async/zipped_app"),
+      ]
+    })
+
     const sagemakerRole = new cdk.aws_iam.Role(
       this, "SageMakerRole", {
       assumedBy: new cdk.aws_iam.ServicePrincipal("sagemaker.amazonaws.com"),
@@ -104,6 +120,8 @@ export class AsyncStack extends cdk.Stack
               resources: [
                 s3_async_input_bucket.bucketArn,
                 s3_async_input_bucket.bucketArn + "/*",
+                s3_model_bucket.bucketArn,
+                s3_model_bucket.bucketArn + "/*",
               ],
               actions: [
                 "s3:*",
@@ -144,6 +162,7 @@ export class AsyncStack extends cdk.Stack
     })
     sagemakerRole.node.addDependency(s3_async_input_bucket)
     sagemakerRole.node.addDependency(s3_async_output_bucket)
+    sagemakerRole.node.addDependency(s3_model_bucket)
 
     const model = new cdk.aws_sagemaker.CfnModel(this, "model",
       {
@@ -151,7 +170,9 @@ export class AsyncStack extends cdk.Stack
         modelName: "T5-question-generator",
         enableNetworkIsolation: false,
         primaryContainer: {
-          image: "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:1.10.2-transformers4.17.0-gpu-py38-cu113-ubuntu20.04",
+          // image: "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:1.10.2-transformers4.17.0-gpu-py38-cu113-ubuntu20.04",
+          image: "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference-neuron:1.10.2-transformers4.20.1-neuron-py37-sdk1.19.1-ubuntu18.04",
+          modelDataUrl: s3_model_data.deployedBucket.s3UrlForObject() + "/model.tar.gz",
           environment: {
             "HF_MODEL_ID": "mrm8488/t5-base-finetuned-question-generation-ap",
             "HF_TASK": "text2text-generation",
@@ -159,6 +180,7 @@ export class AsyncStack extends cdk.Stack
         },
       }
     )
+
     model.node.addDependency(sagemakerRole)
 
 
@@ -270,7 +292,7 @@ export class AsyncStack extends cdk.Stack
     const sagemaker_lambda = new cdk.aws_lambda.Function(this, "LambdaForSagemaker", {
       role: sagemaker_lambda_role,
       description: "Call sagemaker endpoint by placing input in a bucket, calling Sagemaker, and reading the output bucket.",
-      code: cdk.aws_lambda.Code.fromAsset("./app_async"),
+      code: cdk.aws_lambda.Code.fromAsset("./app_async/sagemaker_lambda"),
       runtime: cdk.aws_lambda.Runtime.PYTHON_3_9,
       environment: {
         "ENDPOINT_NAME": async_endpoint.endpointName!,

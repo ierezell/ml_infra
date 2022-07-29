@@ -1,28 +1,26 @@
 import os
-# from time import perf_counter
-from typing import Any, List, Optional, cast
+from typing import Any, Optional, cast, Tuple
 
-# import numpy as np
 import tensorflow  # type: ignore
 import torch
 import torch.neuron
-import uvicorn
-from fastapi import FastAPI
-from pydantic import BaseModel
 from torch.nn import functional as F
 from transformers.generation_utils import GenerationMixin
 from transformers.modeling_outputs import BaseModelOutput, Seq2SeqLMOutput
 from transformers.modeling_utils import PreTrainedModel
+from transformers.models.auto.tokenization_auto import AutoTokenizer
 from transformers.models.t5.configuration_t5 import T5Config
 from transformers.models.t5.modeling_t5 import T5ForConditionalGeneration
 from transformers.models.t5.tokenization_t5 import T5Tokenizer
 
-print("PATH", os.getcwd())
 model_id = "mrm8488/t5-base-finetuned-question-generation-ap"
 num_texts = 1  # Number of input texts to decode
 num_beams = 4  # Number of beams per input text
 max_encoder_length = 32  # Maximum input token length
 max_decoder_length = 32
+
+# To use one neuron core per worker
+os.environ["NEURON_RT_NUM_CORES"] = "1"
 
 
 def reduce(hidden: torch.Tensor, index: int):
@@ -208,10 +206,19 @@ class NeuronGeneration(PreTrainedModel, GenerationMixin):
         return torch.device("cpu")
 
 
-def infer(model: NeuronGeneration, tokenizer: T5Tokenizer, text: str):
-    # Truncate and pad the max length to ensure that the token size is compatible with fixed-sized encoder (Not necessary for pure CPU execution)
+def model_fn(model_dir: str):
+    model_neuron = NeuronGeneration.from_pretrained(model_dir)
+    # load tokenizer and neuron model from model_dir
+    tokenizer: T5Tokenizer = AutoTokenizer.from_pretrained(model_dir)
+    return model_neuron, tokenizer
+
+
+def predict_fn(data: Any, model_tokenizer: Tuple[NeuronGeneration, T5Tokenizer]):
+    # destruct model, tokenizer and model config
+    model, tokenizer = model_tokenizer
+
     batch = tokenizer(
-        text,
+        data,
         max_length=max_decoder_length,
         truncation=True,
         padding="max_length",
@@ -227,51 +234,3 @@ def infer(model: NeuronGeneration, tokenizer: T5Tokenizer, text: str):
     results = [tokenizer.decode(t, skip_special_tokens=True) for t in output]
 
     return results
-
-
-# model_cpu = cast(T5ForConditionalGeneration, T5ForConditionalGeneration.from_pretrained(model_id))
-tokenizer_cpu = cast(T5Tokenizer, T5Tokenizer.from_pretrained(model_id))
-
-# model_neuron = NeuronGeneration(model_cpu.config)
-# model_neuron.trace(
-#     model=model_cpu,
-#     num_texts=num_texts,
-#     num_beams=num_beams,
-#     max_encoder_length=max_encoder_length,
-#     max_decoder_length=max_decoder_length,
-# )
-
-# model_neuron.save_pretrained("./models")
-# tokenizer_cpu.save_pretrained("./models")
-model_neuron = NeuronGeneration.from_pretrained("./models")
-
-
-app = FastAPI()
-
-
-class Question(BaseModel):
-    answers: List[List[str]]
-    contexts: List[str]
-
-
-@app.get("/status")
-def status():
-    return {"status": "ok"}
-
-
-@app.post("/")
-def handler(question: Question):
-    all_results = []
-
-    for ctx_idx, context in enumerate(question.contexts):
-        for answer in question.answers[ctx_idx]:
-            res = infer(
-                model_neuron, tokenizer_cpu, f"answer: {answer} context: {context}"
-            )
-            all_results.append(res)
-
-    return {"results": all_results}
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, port=80, host="0.0.0.0", loop="uvloop")

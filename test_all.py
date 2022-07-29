@@ -9,8 +9,7 @@ ec2_inferentia_url = (
     "http://bp-in-Appli-1A84QB3IVIECM-458273597.us-east-1.elb.amazonaws.com"
 )
 
-
-async_url = "https://oumfs7uw3hcoab4w2fxza2gq6y0ldibj.lambda-url.us-east-1.on.aws/"
+async_url = "https://iti5i6hovxtodg5s2m6necxkuq0xpzdk.lambda-url.us-east-1.on.aws/"
 # onnx_req_warm = requests.post(onnx_lambda_url, json=payload)
 # print("onnx warmup :",onnx_req_warm.elapsed, onnx_req_warm.text)
 # onnx_req = requests.post(onnx_lambda_url, json=payload)
