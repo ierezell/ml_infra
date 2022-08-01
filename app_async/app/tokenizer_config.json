@@ -107,7 +107,7 @@
   "name_or_path": "mrm8488/t5-base-finetuned-question-generation-ap",
   "pad_token": "<pad>",
   "sp_model_kwargs": {},
-  "special_tokens_map_file": "/root/.cache/huggingface/transformers/39c0252c7e1461ad3e76c7426e319d90b7bc99c2d6508f71fc25b0aa53cc38da.c94798918c92ded6aeef2d2f0e666d2cc4145eca1aa6e1336fde07f2e13e2f46",
+  "special_tokens_map_file": "/home/pedro/.cache/huggingface/transformers/39c0252c7e1461ad3e76c7426e319d90b7bc99c2d6508f71fc25b0aa53cc38da.c94798918c92ded6aeef2d2f0e666d2cc4145eca1aa6e1336fde07f2e13e2f46",
   "tokenizer_class": "T5Tokenizer",
   "unk_token": "<unk>"
 }

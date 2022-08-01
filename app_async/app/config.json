@@ -15,7 +15,6 @@
   "is_encoder_decoder": true,
   "is_gated_act": false,
   "layer_norm_epsilon": 1e-06,
-  "max_decoder_length": 32,
   "model_type": "t5",
   "n_positions": 512,
   "num_decoder_layers": 12,
@@ -54,7 +53,8 @@
       "prefix": "translate English to Romanian: "
     }
   },
-  "transformers_version": "4.20.1",
+  "torch_dtype": "float32",
+  "transformers_version": "4.21.0",
   "use_cache": true,
   "vocab_size": 32128
 }

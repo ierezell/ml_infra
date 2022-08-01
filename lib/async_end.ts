@@ -28,6 +28,7 @@ export class AsyncStack extends cdk.Stack
   constructor(scope: Construct, id: string, props: cdk.StackProps)
   {
     super(scope, id, props)
+    // Instance type ml.inf1.xlarge is not supported by endpoints when specifying an AsyncInferenceConfig. 
     const instanceType = "ml.g4dn.xlarge"
 
     const output_key = new cdk.aws_kms.Key(this, 'OutputKey')
@@ -50,12 +51,12 @@ export class AsyncStack extends cdk.Stack
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     })
 
-    const s3_model_data = new cdk.aws_s3_deployment.BucketDeployment(this, 'S3ModelData', {
+    const deployed_data = new cdk.aws_s3_deployment.BucketDeployment(this, 'S3ModelData', {
       destinationBucket: s3_model_bucket,
       memoryLimit: 4096,
       ephemeralStorageSize: cdk.Size.gibibytes(4),
       sources: [
-        // asset in a folder so folder get zipped and unzipped but the asset file is still a zip
+        // .zip asset is in a folder so folder get zipped and unzipped but the asset file is still a zip
         cdk.aws_s3_deployment.Source.asset("./app_async/zipped_app"),
       ]
     })
@@ -170,24 +171,16 @@ export class AsyncStack extends cdk.Stack
         modelName: "T5-question-generator",
         enableNetworkIsolation: false,
         primaryContainer: {
-          // image: "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:1.10.2-transformers4.17.0-gpu-py38-cu113-ubuntu20.04",
-          image: "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference-neuron:1.10.2-transformers4.20.1-neuron-py37-sdk1.19.1-ubuntu18.04",
-          modelDataUrl: s3_model_data.deployedBucket.s3UrlForObject() + "/model.tar.gz",
-          environment: {
-            "HF_MODEL_ID": "mrm8488/t5-base-finetuned-question-generation-ap",
-            "HF_TASK": "text2text-generation",
-          }
+          image: "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:1.10.2-transformers4.17.0-gpu-py38-cu113-ubuntu20.04",
+          modelDataUrl: deployed_data.deployedBucket.s3UrlForObject() + "/model.tar.gz",
         },
       }
     )
-
     model.node.addDependency(sagemakerRole)
-
 
     const async_endpoint_config = new cdk.aws_sagemaker.CfnEndpointConfig(
       this, "SageMakerEndpointConfig",
       {
-
         productionVariants: [
           {
             initialInstanceCount: 1,
@@ -225,24 +218,26 @@ export class AsyncStack extends cdk.Stack
     })
     scale.node.addDependency(async_endpoint)
 
-    const targetScale = new cdk.aws_applicationautoscaling.TargetTrackingScalingPolicy(this, 'AutoscalingPolicy', {
-      policyName: "InvocationAutoScalingPolicy",
-      targetValue: 5.0,
-      scaleInCooldown: cdk.Duration.minutes(2),
-      scaleOutCooldown: cdk.Duration.minutes(2),
-      predefinedMetric: cdk.aws_applicationautoscaling.PredefinedMetric.SAGEMAKER_VARIANT_INVOCATIONS_PER_INSTANCE,
-      scalingTarget: scale,
-    })
-
-    targetScale.node.addDependency(scale)
-
-    // scale.scaleToTrackMetric("TrackingInvocation", {
+    // const targetScale = new cdk.aws_applicationautoscaling.TargetTrackingScalingPolicy(this, 'AutoscalingPolicy', {
+    //   policyName: "InvocationAutoScalingPolicy",
     //   targetValue: 5.0,
     //   scaleInCooldown: cdk.Duration.minutes(2),
     //   scaleOutCooldown: cdk.Duration.minutes(2),
     //   predefinedMetric: cdk.aws_applicationautoscaling.PredefinedMetric.SAGEMAKER_VARIANT_INVOCATIONS_PER_INSTANCE,
+    //   scalingTarget: scale,
     // })
 
+    // targetScale.node.addDependency(scale)
+
+    scale.scaleToTrackMetric("trackingMetric",
+      {
+        policyName: "InvocationAutoScalingPolicy",
+        targetValue: 5.0,
+        scaleInCooldown: cdk.Duration.minutes(2),
+        scaleOutCooldown: cdk.Duration.minutes(2),
+        predefinedMetric: cdk.aws_applicationautoscaling.PredefinedMetric.SAGEMAKER_VARIANT_INVOCATIONS_PER_INSTANCE
+      }
+    )
 
     const sagemaker_lambda_role = new cdk.aws_iam.Role(this, "SageMakerLambdaRole", {
       assumedBy: new cdk.aws_iam.ServicePrincipal("lambda.amazonaws.com"),
