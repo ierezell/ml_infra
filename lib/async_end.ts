@@ -168,8 +168,7 @@ export class AsyncStack extends cdk.Stack
     const model = new cdk.aws_sagemaker.CfnModel(this, "model",
       {
         executionRoleArn: sagemakerRole.roleArn,
-        modelName: "T5-question-generator",
-        enableNetworkIsolation: false,
+        modelName: "ModelVariant",
         primaryContainer: {
           image: "763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-inference:1.10.2-transformers4.17.0-gpu-py38-cu113-ubuntu20.04",
           modelDataUrl: deployed_data.deployedBucket.s3UrlForObject() + "/model.tar.gz",
@@ -186,7 +185,7 @@ export class AsyncStack extends cdk.Stack
             initialInstanceCount: 1,
             initialVariantWeight: 1.0,
             instanceType: instanceType,
-            modelName: "T5-question-generator",
+            modelName: "ModelVariant",
             variantName: "ModelVariant",
           }
         ],
@@ -205,7 +204,7 @@ export class AsyncStack extends cdk.Stack
 
     const async_endpoint = new cdk.aws_sagemaker.CfnEndpoint(this, 'SagemakerEndpoint', {
       endpointConfigName: async_endpoint_config.attrEndpointConfigName,
-      endpointName: 'SagemakerEndpoint'
+      endpointName: 'SagemakerEndpoint',
     })
     async_endpoint.node.addDependency(async_endpoint_config)
 
@@ -215,29 +214,31 @@ export class AsyncStack extends cdk.Stack
       resourceId: 'endpoint/' + async_endpoint.endpointName + '/variant/' + "ModelVariant",
       scalableDimension: 'sagemaker:variant:DesiredInstanceCount',
       serviceNamespace: cdk.aws_applicationautoscaling.ServiceNamespace.SAGEMAKER,
+      role: sagemakerRole
     })
+
     scale.node.addDependency(async_endpoint)
 
-    // const targetScale = new cdk.aws_applicationautoscaling.TargetTrackingScalingPolicy(this, 'AutoscalingPolicy', {
-    //   policyName: "InvocationAutoScalingPolicy",
-    //   targetValue: 5.0,
-    //   scaleInCooldown: cdk.Duration.minutes(2),
-    //   scaleOutCooldown: cdk.Duration.minutes(2),
-    //   predefinedMetric: cdk.aws_applicationautoscaling.PredefinedMetric.SAGEMAKER_VARIANT_INVOCATIONS_PER_INSTANCE,
-    //   scalingTarget: scale,
-    // })
+    const targetScale = new cdk.aws_applicationautoscaling.TargetTrackingScalingPolicy(this, 'AutoscalingPolicy', {
+      policyName: "BananaEndpointInvocationScalingPolicy",
+      targetValue: 5.0,
+      scaleInCooldown: cdk.Duration.minutes(2),
+      scaleOutCooldown: cdk.Duration.minutes(2),
+      predefinedMetric: cdk.aws_applicationautoscaling.PredefinedMetric.SAGEMAKER_VARIANT_INVOCATIONS_PER_INSTANCE,
+      scalingTarget: scale,
+    })
 
-    // targetScale.node.addDependency(scale)
+    targetScale.node.addDependency(scale)
 
-    scale.scaleToTrackMetric("trackingMetric",
-      {
-        policyName: "InvocationAutoScalingPolicy",
-        targetValue: 5.0,
-        scaleInCooldown: cdk.Duration.minutes(2),
-        scaleOutCooldown: cdk.Duration.minutes(2),
-        predefinedMetric: cdk.aws_applicationautoscaling.PredefinedMetric.SAGEMAKER_VARIANT_INVOCATIONS_PER_INSTANCE
-      }
-    )
+    // scale.scaleToTrackMetric("trackingMetric",
+    //   {
+    //     policyName: "InvocationAutoScalingPolicy",
+    //     targetValue: 5.0,
+    //     scaleInCooldown: cdk.Duration.minutes(2),
+    //     scaleOutCooldown: cdk.Duration.minutes(2),
+    //     predefinedMetric: cdk.aws_applicationautoscaling.PredefinedMetric.SAGEMAKER_VARIANT_INVOCATIONS_PER_INSTANCE
+    //   }
+    // )
 
     const sagemaker_lambda_role = new cdk.aws_iam.Role(this, "SageMakerLambdaRole", {
       assumedBy: new cdk.aws_iam.ServicePrincipal("lambda.amazonaws.com"),
