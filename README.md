@@ -1,11 +1,16 @@
-# Welcome to your CDK TypeScript project
+# Ml_infra
+This is a small test to deploy an NLP model (huggingface) on AWS with the CDK. 
 
-This is a blank project for TypeScript development with CDK.
+You have here code to deploy on: 
+- Lambda
+- Ec2 with GPU
+- Inferentia aws chip
+- Asynchronous inference
+- Sagemaker hosting
+- Onnx version to run faster on cpu (or GPU)
 
-The `cdk.json` file tells the CDK Toolkit how to execute your app.
-
-## Useful commands
-
+# Development
+These are the "classic" aws CDK commands, refer to their doc for more, if you miss authentification etc...
 - `npm run build` compile typescript to js
 - `npm run watch` watch for changes and compile
 - `npm run test` perform the jest unit tests
